@@ -31,5 +31,5 @@ RUN:
 2. pip install -r requirements.txt
 3. python login_window.py
 
-
-http://localhost:8000/login?username=""&password=""
+**for user part
+1. python UserUI.py
