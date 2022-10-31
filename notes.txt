@@ -1,0 +1,35 @@
+1. git clone
+2. install miniconda
+
+
+TODO:
+1. Initilize database - store all cases
+2. Initilize the face encoding - take image ad return 128 D embedding
+
+RUN:
+
+** for initializing the env
+# conda activate base
+1. conda create -n venv
+2. conda activate venv / call conda.bat activate venv
+
+** for initilizing the databse
+# postgre installed [or change pw 3 jgh -> postgres.py, docker-compose.yml, .env.file]
+1. cd ./database [main.py file to run, first install requirements]
+2. pip install -r requirements.txt
+3. uvicorn main:app --port 8000
+
+**for face encoding
+1. cd face_encoding
+2. conda se dlib install kro, or pip se baaki sare
+	conda install -c conda-forge dlib
+	pip install python-multipart opencv-python numpy pillow fastapi uvicorn
+3.uvicorn main:app --port 8002
+
+**for app part
+1. cd app
+2. pip install -r requirements.txt
+3. python login_window.py
+
+
+http://localhost:8000/login?username=""&password=""
