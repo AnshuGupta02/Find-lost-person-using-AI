@@ -144,6 +144,14 @@ def get_confirmed_cases(submitted_by: str):
         cursor.execute(query)
         return cursor.fetchall()
 
+@app.get("/get_unconfirmed_cases")
+def get_confirmed_cases(submitted_by: str):
+    query = f"select * from submitted_cases where submitted_by='{submitted_by}' and status='NF'"
+    with PostgresConnection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query)
+        return cursor.fetchall()
+
 
 @app.get("/change_found_status")
 def change_found_status(case_id: str):

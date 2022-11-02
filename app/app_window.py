@@ -3,13 +3,15 @@ import io
 import base64
 import requests
 import json
+import datetime
 
 import numpy as np
 
 from PIL import Image
 
 from PyQt5.QtGui import QFont, QIcon, QStandardItemModel, QStandardItem, QImage, QPixmap
-from PyQt5.QtWidgets import QMainWindow, QApplication, QLabel, QPushButton, QMessageBox, QListView
+from PyQt5.QtWidgets import QMainWindow, QApplication, QLabel, QPushButton, QMessageBox, QListView, QComboBox, \
+    QVBoxLayout, QWidget, QHBoxLayout
 from PyQt5.QtCore import Qt, QSize
 
 from new_case import NewCase
@@ -73,20 +75,58 @@ class AppWindow(QMainWindow):
         submitted_case_btn.move(398, 5)
         submitted_case_btn.clicked.connect(self.view_submitted_cases)
 
-        # confirmed_case_btn = QPushButton("Confirmed Cases", self)
-        # confirmed_case_btn.setFont(QFont("Times", 13))
-        # confirmed_case_btn.resize(200, 50)
-        # confirmed_case_btn.move(598, 30)
-        # confirmed_case_btn.clicked.connect(self.view_confirmed_cases)
+        self.combo_box = QComboBox(self)
+        self.combo_box.addItems(["All", "Confirmed", "UnConfirmed"])
+        self.combo_box.currentTextChanged.connect(self.selection_change)
+        self.combo_box.move(self.width-135, 85)
+        self.combo_box.setMinimumWidth(105)
+        self.combo_box.hide()
 
+        self.t = QListView(self)
+        self.t.setIconSize(QSize(96, 96))
+        self.t.setMinimumSize(self.width-180, self.height-100)
+        self.t.move(40, 95)
+        self.t.setSpacing(7)
+        self.t.setStyleSheet("background-color: transparent; border-style:none;")
+        self.t.hide()
+
+        self.widget = QWidget()
 
 
         self.show()
 
+    def hide_view_cases(self):
+        self.t.hide()
+        self.combo_box.hide()
+
+    def selection_change(self, text):
+        if text == "All":
+            URL = "http://localhost:8000/get_submitted_cases?submitted_by=" + self.user
+            msg = "No cases have been submitted by you."
+        elif text == "Confirmed":
+            URL = "http://localhost:8000/get_confirmed_cases?submitted_by=" + self.user
+            msg = "No confirmed cases."
+        elif text == "UnConfirmed":
+            URL = "http://localhost:8000/get_unconfirmed_cases?submitted_by=" + self.user
+            msg = "No Unconfirmed cases."
+
+        try:
+            cases = json.loads(requests.get(URL).text)
+            if not cases:
+                self.t.hide()
+                QMessageBox.about(self, "No case Found", msg)
+            else:
+                self.t.show()
+                self.view_submitted_cases_ui(cases)
+        except requests.ConnectionError as e:
+            QMessageBox.about(self, "Something went wrong", str(e))
+
     def new_case(self):
+        self.hide_view_cases()
         self.newcase = NewCase(self.user)
 
     def refresh_model(self):
+        self.hide_view_cases()
         out = train(self.user)
         if out["status"]:
             QMessageBox.about(self, "Success!", out["message"])
@@ -94,6 +134,7 @@ class AppWindow(QMainWindow):
             QMessageBox.about(self, "Error", out["message"])
 
     def match_from_submitted(self):
+        self.hide_view_cases()
         out = match()
         if out["status"]:
             self.view_cases(out["result"])
@@ -101,60 +142,18 @@ class AppWindow(QMainWindow):
             QMessageBox.about(self, "Error", out["message"])
 
     def view_submitted_cases(self):
-        URL = "http://localhost:8000/get_submitted_cases?submitted_by=" + self.user
-        try:
-            cases = json.loads(requests.get(URL).text)
-            if cases == []:
-                QMessageBox.about(
-                    self, "No cases Found", "No cases have been submitted by you"
-                )
-            else:
-                self.view_submitted_cases_ui(cases)
-        except requests.ConnectionError as e:
-            QMessageBox.about(self, "Something went wrong", str(e))
-
-    def view_confirmed_cases(self):
-        URL = "http://localhost:8000/get_confirmed_cases?submitted_by=" + self.user
-        try:
-            cases = json.loads(requests.get(URL).text)
-            if cases == []:
-                QMessageBox.about(
-                    self, "No cases Found", "No cases have been confirmed by you"
-                )
-            else:
-                self.view_submitted_cases_ui(cases)
-        except requests.ConnectionError as e:
-            QMessageBox.about(self, "Something went wrong", str(e))
+        self.combo_box.show()
+        self.selection_change("All")
 
     def view_submitted_cases_ui(self, result):
-        list_ = QListView(self)
-        list_.setIconSize(QSize(96, 96))
-        list_.setMinimumSize(400, 380)
-        list_.move(40, 95)
-        model = QStandardItemModel(list_)
-        model.setHorizontalHeaderLabels(['Submitted Cases'])
+        model = QStandardItemModel(self.t)
+        for _, _, name, father_name, age, mobile, _, image, submitted_on, _, status in result:
+            item = QStandardItem(f"Name: {name} \nFather's Name: {father_name} \nAge: {age} \nMobile No.: {mobile} "
+                                 f" \nStatus: {'Not Found' if status=='NF' else 'Found'} \nCase Registered Date & "
+                                 f"Time: "
+                                 f"{datetime.datetime.strptime(submitted_on, '%Y-%m-%dT%H:%M:%S.%f').strftime('%c')}")
 
-        for case_detail in result:
-            image = self.decode_base64(case_detail[7])
-            item = QStandardItem(
-                " Name: "
-                + case_detail[2]
-                + "\n Father's Name: "
-                + case_detail[3]
-                + "\n Age: "
-                + str(case_detail[4])
-                + "\n Mobile: "
-                + str(case_detail[5])
-                + "\n Status: "
-                + list(
-                    map(
-                        lambda x: "Not Found" if x == "NF" else "Found",
-                        [case_detail[10]],
-                    )
-                )[0]
-                + "\n Submission Date: "
-                + case_detail[8]
-            )
+            image = self.decode_base64(image)
             image = QImage(
                 image,
                 image.shape[1],
@@ -162,19 +161,20 @@ class AppWindow(QMainWindow):
                 image.shape[1] * 3,
                 QImage.Format_RGB888,
             )
+
             icon = QPixmap(image)
             item.setIcon(QIcon(icon))
             model.appendRow(item)
 
-        list_.setModel(model)
-        list_.show()
+        self.t.setModel(model)
+        self.t.show()
 
     def change_confirmation_Status(self, case_id):
         requests.get(f"http://localhost:8000/change_found_status?case_id='{case_id}'")
 
     def view_cases(self, result):
         list_ = QListView(self)
-        list_.setIconSize(QSize(96, 96))
+        list_.setIconSize(QSize(100, 100))
         list_.setMinimumSize(400, 380)
         list_.move(40, 95)
         list_.viewMode()
