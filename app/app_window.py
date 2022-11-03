@@ -10,8 +10,7 @@ import numpy as np
 from PIL import Image
 
 from PyQt5.QtGui import QFont, QIcon, QStandardItemModel, QStandardItem, QImage, QPixmap
-from PyQt5.QtWidgets import QMainWindow, QApplication, QLabel, QPushButton, QMessageBox, QListView, QComboBox, \
-    QVBoxLayout, QWidget, QHBoxLayout
+from PyQt5.QtWidgets import QMainWindow, QApplication, QLabel, QPushButton, QMessageBox, QListView, QComboBox
 from PyQt5.QtCore import Qt, QSize
 
 from new_case import NewCase
@@ -90,14 +89,22 @@ class AppWindow(QMainWindow):
         self.t.setStyleSheet("background-color: transparent; border-style:none;")
         self.t.hide()
 
-        self.widget = QWidget()
-
+        self.t2 = QListView(self)
+        self.t2.setIconSize(QSize(96, 96))
+        self.t2.setMinimumSize(self.width - 80, self.height - 100)
+        self.t2.move(40, 75)
+        self.t2.setSpacing(10)
+        self.t2.setStyleSheet("background-color: transparent; border-style:none;")
+        self.t2.hide()
 
         self.show()
 
     def hide_view_cases(self):
         self.t.hide()
         self.combo_box.hide()
+
+    def hide_match_cases(self):
+        self.t2.hide()
 
     def selection_change(self, text):
         if text == "All":
@@ -122,10 +129,12 @@ class AppWindow(QMainWindow):
             QMessageBox.about(self, "Something went wrong", str(e))
 
     def new_case(self):
+        self.hide_match_cases()
         self.hide_view_cases()
         self.newcase = NewCase(self.user)
 
     def refresh_model(self):
+        self.hide_match_cases()
         self.hide_view_cases()
         out = train(self.user)
         if out["status"]:
@@ -137,11 +146,14 @@ class AppWindow(QMainWindow):
         self.hide_view_cases()
         out = match()
         if out["status"]:
+            self.t2.show()
             self.view_cases(out["result"])
         else:
+            self.t2.hide()
             QMessageBox.about(self, "Error", out["message"])
 
     def view_submitted_cases(self):
+        self.hide_match_cases()
         self.combo_box.show()
         self.selection_change("All")
 
@@ -169,45 +181,49 @@ class AppWindow(QMainWindow):
         self.t.setModel(model)
         self.t.show()
 
-    def change_confirmation_Status(self, case_id):
-        requests.get(f"http://localhost:8000/change_found_status?case_id='{case_id}'")
+    def change_confirmation_Status(self, case_id, submission_list):
+        requests.get(f"http://localhost:8000/change_found_status?case_id={case_id}&submission_list={submission_list}")
+
+    def btn_clicked_for_confirmation(self, case_id, submission_list):
+        def click(text):
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Question)
+            msg.setText("Are you sure you want to mark the case 'found'?")
+            msg.setWindowTitle("Confirm Case")
+            msg.setStandardButtons(QMessageBox.No | QMessageBox.Yes)
+            return_value = msg.exec()
+            if return_value == QMessageBox.Yes:
+                self.change_confirmation_Status(case_id, submission_list)
+                self.t2.hide()
+        return click
 
     def view_cases(self, result):
-        list_ = QListView(self)
-        list_.setIconSize(QSize(100, 100))
-        list_.setMinimumSize(400, 380)
-        list_.move(40, 95)
-        list_.viewMode()
-        model = QStandardItemModel(list_)
-        item = QStandardItem("Matched")
-        model.appendRow(item)
+        """
+        Args:
+            result: dictionary with pair of case_id and the list of submission_ids {case_id: [submission_id1..]}
+        """
+        model = QStandardItemModel(self.t2)
 
         for case_id, submission_list in result.items():
-            # Change status of Matched Case
-            # requests.get(
-            #     f"http://localhost:8000/change_found_status?case_id='{case_id}'"
-            # )
-            case_details = self.get_details(case_id, "case")
+            name, father_name, case_image, case_mobile, age, case_submitted_on = self.get_details(case_id,
+                                                                                                  "case")[0]
             for submission_id in submission_list:
-                submission_details = self.get_details(submission_id, "public_submission")
-                image = self.decode_base64(case_details[0][2])
-                item = QStandardItem(
-                    " Name: "
-                    + case_details[0][0]
-                    + "\n Father's Name: "
-                    + case_details[0][1]
-                    + "\n Age: "
-                    + str(case_details[0][4])
-                    + "\n Mobile: "
-                    + str(case_details[0][3])
-                    + "\n Found at: "
-                    + submission_details[0][0]
-                    + "\nUser Name & Contact Number: "
-                    + submission_details[0][3]
-                    + " & "
-                    + str(submission_details[0][4])
-                    +"\n Matched Date" + str(submission_details[0][1])
-                )
+                found_at, user_submitted_on, user_image, user_name, user_contact = self.get_details(submission_id,
+                                                                                                   "public_submission")[0]
+
+                item = QStandardItem(f"Name: {name} \t\tFound at: {found_at}\nFather's Name:"
+                                     f" {father_name} "
+                                     f"\nAge:"
+                                     f" {age} \nMobile "
+                                     f"No.: "
+                                     f"{case_mobile} \nCase Registered on: "
+                                     f"{datetime.datetime.strptime(case_submitted_on, '%Y-%m-%dT%H:%M:%S.%f').strftime('%c')} "
+                                     f"\n{'-'*50}\nSubmitted by:"
+                                     f" {user_name} \nContact no.:"
+                                     f"{user_contact} \nMatched Date: "
+                                     f"{datetime.datetime.strptime(user_submitted_on, '%Y-%m-%dT%H:%M:%S.%f').strftime('%c')}")
+
+                image = self.decode_base64(user_image)
                 image = QImage(
                     image,
                     image.shape[1],
@@ -215,12 +231,14 @@ class AppWindow(QMainWindow):
                     image.shape[1] * 3,
                     QImage.Format_RGB888,
                 )
+
                 icon = QPixmap(image)
                 item.setIcon(QIcon(icon))
                 model.appendRow(item)
 
-        list_.setModel(model)
-        list_.show()
+        self.t2.setModel(model)
+        self.t2.selectionModel().selectionChanged.connect(self.btn_clicked_for_confirmation(case_id, submission_list))
+        self.t2.show()
 
     def get_details(self, case_id, type):
         if type == "public_submission":

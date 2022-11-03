@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 
 
-def get_user_submitted_data(status="NR"):
+def get_user_submitted_data():
     url = "http://localhost:8000/user_submission"
     try:
         result = requests.get(url)
@@ -33,9 +33,9 @@ def match():
         return {"status": False, "message": "Couldn't connect to database"}
 
     if len(user_submissions_df) == 0:
-        return {"status": False, "message": "No submissions found"}
+        return {"status": False, "message": "No user submissions found"}
 
-    if os.path.isfile(model_name):
+    elif os.path.isfile(model_name):
         with open(model_name, "rb") as f:
             (le, clf) = pickle.load(f)
     else:
@@ -52,6 +52,10 @@ def match():
             predicted_label = clf.predict([face_encoding])
             inversed_label = le.inverse_transform([predicted_label])[0]
             matched_images[inversed_label].append(label)
+
+
+        if not matched_images:
+            return {"status": False, "message": "No user submission found for active cases."}
 
     return {"status": True, "result": matched_images}
 

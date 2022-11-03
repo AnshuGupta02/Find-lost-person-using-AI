@@ -61,6 +61,8 @@ class LoginWindow(QDialog):
                     self.app_window = AppWindow(user=self.username.text())
                     self.close()
                 else:
+                    self.username.clear()
+                    self.password.clear()
                     QMessageBox.about(self, "Login Failed", "\nPlease enter the correct credentials.\t\n")
             except requests.exceptions.ConnectionError:
                 QMessageBox.about(

@@ -100,7 +100,7 @@ def user_submission(user_submission: UserSubmission):
     status = "NC"
     query = f"insert into user_submissions(id, submitted_by, face_encoding,\
               location, mobile, image, status) values('{sub_id}', '{name}', '{face_encoding}',\
-              '{location}', '{mobile}', '{image}', 'NR')"
+              '{location}', '{mobile}', '{image}', '{status}')"
     with PostgresConnection() as conn:
         cursor = conn.cursor()
         cursor.execute(query)
@@ -109,7 +109,7 @@ def user_submission(user_submission: UserSubmission):
 
 @app.get("/user_submission")
 def get_usr_submission():
-    query = f"select id, face_encoding from user_submissions"
+    query = f"select id, face_encoding from user_submissions where status = 'NC'"
     with PostgresConnection() as conn:
         cursor = conn.cursor()
         cursor.execute(query)
@@ -154,11 +154,15 @@ def get_confirmed_cases(submitted_by: str):
 
 
 @app.get("/change_found_status")
-def change_found_status(case_id: str):
-    query = f"update submitted_cases set status='F' where case_id={case_id}"
+def change_found_status(case_id: str, submission_list: str):
     with PostgresConnection() as conn:
         cursor = conn.cursor()
+        query = f"update submitted_cases set status='F' where case_id='{case_id}'"
         cursor.execute(query)
+        t = submission_list.split("'")
+        for i in range(1, len(t), 2):
+            query=f"update user_submissions set status='C' where id='{t[i]}'"
+            cursor.execute(query)
     return {"status": "success"}
 
 
